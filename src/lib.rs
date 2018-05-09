@@ -167,7 +167,6 @@
 
 #[cfg(feature = "antidote")]
 extern crate antidote;
-#[cfg(feature = "chrono")]
 extern crate chrono;
 extern crate crossbeam;
 #[cfg(feature = "flate2")]
@@ -223,6 +222,7 @@ pub use priv_file::{init_file, Error};
 use append::Append;
 use config::Config;
 use filter::Filter;
+use record::ExtendedRecord;
 
 pub mod append;
 pub mod config;
@@ -234,6 +234,7 @@ pub mod encode;
 mod priv_file;
 #[cfg(feature = "console_writer")]
 mod priv_io;
+pub mod record;
 
 type FnvHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FnvHasher>>;
 
@@ -303,8 +304,8 @@ impl ConfiguredLogger {
         self.level >= level
     }
 
-    fn log(&self, record: &log::Record, appenders: &[Appender]) {
-        if self.enabled(record.level()) {
+    fn log(&self, record: &ExtendedRecord, appenders: &[Appender]) {
+        if self.enabled(record.record().level()) {
             for &idx in &self.appenders {
                 if let Err(err) = appenders[idx].append(record) {
                     handle_error(&*err);
@@ -320,7 +321,7 @@ struct Appender {
 }
 
 impl Appender {
-    fn append(&self, record: &Record) -> Result<(), Box<error::Error + Sync + Send>> {
+    fn append(&self, record: &ExtendedRecord) -> Result<(), Box<error::Error + Sync + Send>> {
         for filter in &self.filters {
             match filter.filter(record) {
                 filter::Response::Accept => break,
@@ -420,7 +421,7 @@ impl log::Log for Logger {
         shared
             .root
             .find(record.target())
-            .log(record, &shared.appenders);
+            .log(&ExtendedRecord::new(record), &shared.appenders);
     }
 
     fn flush(&self) {
